@@ -1,228 +1,178 @@
-# File 1: main.py
-"""
-Username Password Checker Syste
-VNIT CSP300 Assignment 2 - JIRA Dem
-Simple 2-file implementation
-"""
-
-import csv
 import hashlib
-import os
-import getpass
 from datetime import datetime
+import csv
+import os
 
-class AuthSystem:
-    def __init__(self):
-        self.csv_file = "users.csv"
-        self.init_csv()
-    
-    def init_csv(self):
-        """Initialize CSV file if it doesn't exist"""
-        try:
-            if not os.path.exists(self.csv_file):
-                with open(self.csv_file, 'w', newline='') as file:
-                    writer = csv.writer(file)
-                    writer.writerow(['username', 'password_hash', 'created_date', 'last_login'])
-                print(f"✅ Created CSV file: {self.csv_file}")
-        except Exception as e:
-            print(f"❌ CSV Error: {e}")
+class UserPasswordChecker:
+    def __init__(self, csv_file="users.csv"):
+        self.csv_file = csv_file
+        # Create CSV file if it doesn't exist
+        if not os.path.exists(self.csv_file):
+            with open(self.csv_file, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['username', 'password_hash', 'created_date'])
     
     def hash_password(self, password):
-        """Hash password using SHA-256"""
+        """Hash password using SHA256"""
         return hashlib.sha256(password.encode()).hexdigest()
     
-    def validate_username(self, username):
-        """Validate username (3-20 chars, alphanumeric)"""
-        if not username or len(username) < 3 or len(username) > 20:
-            return False
-        return username.isalnum()
-    
-    def validate_password(self, password):
-        """Validate password strength"""
-        if len(password) < 8:
-            return False
-        
-        has_upper = any(c.isupper() for c in password)
-        has_lower = any(c.islower() for c in password)
-        has_digit = any(c.isdigit() for c in password)
-        has_special = any(c in "!@#$%^&*(),.?\":{}|<>" for c in password)
-        
-        return has_upper and has_lower and has_digit and has_special
-    
-    def username_exists(self, username):
-        """Check if username already exists"""
+    def get_users(self):
+        """Read users from CSV file"""
+        users = {}
         try:
-            with open(self.csv_file, 'r') as file:
-                reader = csv.DictReader(file)
+            with open(self.csv_file, 'r') as f:
+                reader = csv.DictReader(f)
                 for row in reader:
-                    if row['username'].lower() == username.lower():
-                        return True
-            return False
-        except FileNotFoundError:
-            return False
+                    users[row['username']] = {
+                        'password_hash': row['password_hash'],
+                        'created_date': row['created_date']
+                    }
         except Exception as e:
-            print(f"❌ Error checking username: {e}")
+            print(f"Error reading CSV: {str(e)}")
+        return users
+    
+    def save_user(self, username, password_hash):
+        """Save user to CSV file"""
+        try:
+            with open(self.csv_file, 'a', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([username, password_hash, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+            return True
+        except Exception as e:
+            print(f"Error writing to CSV: {str(e)}")
             return False
     
-    def register_user(self):
-        """Register new user"""
+    def register_user(self, username, password):
+        """Register new user with validation"""
         try:
-            print("\n🔐 USER REGISTRATION")
-            print("-" * 25)
+            if len(username) < 3:
+                raise ValueError("Username must be at least 3 characters long")
             
-            # Get username
-            while True:
-                username = input("Enter username (3-20 chars): ").strip()
-                if not self.validate_username(username):
-                    print("❌ Invalid username! Use 3-20 alphanumeric characters.")
-                    continue
-                if self.username_exists(username):
-                    print("❌ Username already exists! Try another.")
-                    continue
-                break
+            if len(password) < 6:
+                raise ValueError("Password must be at least 6 characters long")
             
-            # Get password
-            while True:
-                password = getpass.getpass("Enter password (8+ chars, mixed case, digit, special): ")
-                if not self.validate_password(password):
-                    print("❌ Weak password! Need 8+ chars with uppercase, lowercase, digit, special char.")
-                    continue
-                
-                confirm = getpass.getpass("Confirm password: ")
-                if password != confirm:
-                    print("❌ Passwords don't match!")
-                    continue
-                break
+            users = self.get_users()
+            if username in users:
+                raise ValueError(f"Username '{username}' already exists")
             
-            # Save user
-            password_hash = self.hash_password(password)
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if self.save_user(username, self.hash_password(password)):
+                return f"User '{username}' registered successfully!"
+            else:
+                raise Exception("Failed to save user data")
             
-            with open(self.csv_file, 'a', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow([username, password_hash, current_time, "Never"])
-            
-            print(f"✅ User '{username}' registered successfully!")
-            
+        except ValueError as e:
+            return f"Registration Error: {str(e)}"
         except Exception as e:
-            print(f"❌ Registration failed: {e}")
+            return f"System Error: {str(e)}"
     
-    def login_user(self):
-        """Login existing user"""
+    def authenticate_user(self, username, password):
+        """Authenticate user credentials"""
         try:
-            print("\n🔑 USER LOGIN")
-            print("-" * 15)
+            if not username or not password:
+                raise ValueError("Username and password cannot be empty")
             
-            username = input("Username: ").strip()
-            password = getpass.getpass("Password: ")
-            
-            if not os.path.exists(self.csv_file):
-                print("❌ No users registered yet!")
-                return
+            users = self.get_users()
+            if username not in users:
+                raise ValueError(f"Username '{username}' not found")
             
             password_hash = self.hash_password(password)
             
-            # Read and check users
-            users = []
-            user_found = False
-            login_success = False
-            
-            with open(self.csv_file, 'r') as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    if row['username'].lower() == username.lower():
-                        user_found = True
-                        if row['password_hash'] == password_hash:
-                            row['last_login'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            login_success = True
-                            print(f"✅ Welcome back, {username}!")
-                            print(f"📅 Last login updated: {row['last_login']}")
-                    users.append(row)
-            
-            if not user_found:
-                print("❌ Username not found!")
-                return
-            if not login_success:
-                print("❌ Invalid password!")
-                return
-            
-            # Update CSV with new login time
-            with open(self.csv_file, 'w', newline='') as file:
-                if users:
-                    writer = csv.DictWriter(file, fieldnames=users[0].keys())
-                    writer.writeheader()
-                    writer.writerows(users)
-                    
+            if users[username]['password_hash'] == password_hash:
+                return f"Login successful! Welcome {username}"
+            else:
+                raise ValueError("Invalid password")
+                
+        except ValueError as e:
+            return f"Authentication Error: {str(e)}"
         except Exception as e:
-            print(f"❌ Login error: {e}")
+            return f"System Error: {str(e)}"
     
-    def view_users(self):
-        """View all registered users (admin function)"""
-        try:
-            print("\n👥 ALL REGISTERED USERS")
-            print("-" * 30)
-            
-            if not os.path.exists(self.csv_file):
-                print("❌ No users found!")
-                return
-            
-            with open(self.csv_file, 'r') as file:
-                reader = csv.DictReader(file)
-                users = list(reader)
-                
-                if not users:
-                    print("❌ No users registered!")
-                    return
-                
-                print(f"{'Username':<15} {'Created':<20} {'Last Login':<20}")
-                print("=" * 55)
-                
-                for user in users:
-                    print(f"{user['username']:<15} {user['created_date']:<20} {user['last_login']:<20}")
-                    
-                print(f"\n📊 Total Users: {len(users)}")
-                
-        except Exception as e:
-            print(f"❌ Error viewing users: {e}")
+    def list_users(self):
+        """List all registered users"""
+        users = self.get_users()
+        if not users:
+            return "No users registered yet."
+        
+        result = "Registered Users:\n"
+        for username, data in users.items():
+            result += f"- Username: {username}, Created: {data['created_date']}\n"
+        return result
+
+def run_tests():
+    """Run basic test cases"""
+    checker = UserPasswordChecker()
+    
+    # Test registration
+    print("\nTesting Registration:")
+    print(checker.register_user("test1", "password123"))
+    print(checker.register_user("test1", "password123"))  # Should fail - duplicate
+    print(checker.register_user("t", "pass"))  # Should fail - short username
+    print(checker.register_user("test2", "pass"))  # Should fail - short password
+    
+    # Test authentication
+    print("\nTesting Authentication:")
+    print(checker.authenticate_user("test1", "password123"))  # Should succeed
+    print(checker.authenticate_user("test1", "wrongpass"))  # Should fail
+    print(checker.authenticate_user("nonexistent", "pass"))  # Should fail
+    
+    # Test user listing
+    print("\nTesting User Listing:")
+    print(checker.list_users())
 
 def main():
-    """Main program function"""
-    auth = AuthSystem()
-    
-    print("=" * 50)
-    print("🔐 USERNAME PASSWORD CHECKER SYSTEM")
-    print("🏫 VNIT CSP300 - Software Lab III")
-    print("👨‍💻 Assignment 2 - JIRA Integration Demo")
-    print("=" * 50)
+    """Main function with user interface"""
+    checker = UserPasswordChecker()
     
     while True:
+        print("\n=== Username-Password Checker ===")
+        print("1. Register New User")
+        print("2. Login")
+        print("3. List Users")
+        print("4. Run Tests")
+        print("5. Exit")
+        
         try:
-            print("\n🎯 MAIN MENU")
-            print("1️⃣  Register New User")
-            print("2️⃣  Login")
-            print("3️⃣  View All Users (Admin)")
-            print("4️⃣  Exit")
-            
-            choice = input("\n➡️  Enter choice (1-4): ").strip()
+            choice = input("\nEnter your choice (1-5): ").strip()
             
             if choice == '1':
-                auth.register_user()
+                print("\n--- User Registration ---")
+                username = input("Enter username: ").strip()
+                password = input("Enter password: ").strip()
+                result = checker.register_user(username, password)
+                print(result)
+                
             elif choice == '2':
-                auth.login_user()
+                print("\n--- User Login ---")
+                username = input("Enter username: ").strip()
+                password = input("Enter password: ").strip()
+                result = checker.authenticate_user(username, password)
+                print(result)
+                
             elif choice == '3':
-                auth.view_users()
+                print("\n--- Registered Users ---")
+                print(checker.list_users())
+                    
             elif choice == '4':
-                print("\n✅ Thank you for using the system!")
-                print("🎓 VNIT CSP300 Assignment 2 Demo Complete")
+                print("\n--- Running Tests ---")
+                run_tests()
+                
+            elif choice == '5':
+                print("Thank you for using Username-Password Checker!")
                 break
+                
             else:
-                print("❌ Invalid choice! Please select 1-4.")
+                print("Invalid choice. Please enter 1-5.")
                 
         except KeyboardInterrupt:
-            print("\n\n⚠️  Program interrupted by user")
+            print("\n\nProgram interrupted by user.")
             break
         except Exception as e:
-            print(f"❌ Unexpected error: {e}")
+            print(f"Unexpected error: {str(e)}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nProgram terminated by user.")
+    except Exception as e:
+        print(f"\nUnexpected error: {str(e)}")
