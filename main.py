@@ -1,7 +1,7 @@
 # File 1: main.py
 """
 Username Password Checker System
-VNIT CSP300 Assignment 2 - JIRA Demo
+VNIT CSP300 Assignment 2 - JIRA Dem
 Simple 2-file implementation
 """
 
