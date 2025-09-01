@@ -2,7 +2,7 @@
 """
 Test Cases for Username Password Checker
 VNIT CSP300 Assignment 2 - JIRA Demo
-Automated testing for validation functions
+Automated testing for validation function
 """
 
 import csv
